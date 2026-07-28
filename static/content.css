@@ -1,1 +1,54 @@
-/* Règles de masquage: phase 2. */
+/* On cache les enfants du post, jamais le post lui-meme, et on ne retire aucun
+   node du DOM: le fil garde sa structure et le defilement reste stable. */
+[data-slop-hidden] > *:not(.slop-placeholder) {
+  display: none;
+}
+
+.slop-placeholder {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #5f6b7a;
+  background: #f3f2ef;
+  border-radius: 8px;
+}
+
+.slop-placeholder__summary {
+  flex: 1 1 auto;
+}
+
+.slop-placeholder__show {
+  flex: 0 0 auto;
+  padding: 4px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: #0a66c2;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.slop-placeholder__show:hover {
+  background: rgba(10, 102, 194, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .slop-placeholder {
+    color: #a8b3bf;
+    background: #1b1f23;
+  }
+
+  .slop-placeholder__show {
+    color: #71b7fb;
+  }
+
+  .slop-placeholder__show:hover {
+    background: rgba(113, 183, 251, 0.12);
+  }
+}

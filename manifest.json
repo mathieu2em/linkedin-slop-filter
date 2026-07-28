@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Slop Filter",
+  "version": "0.1.0",
+  "permissions": ["storage"],
+  "content_scripts": [{
+    "matches": ["https://www.linkedin.com/*"],
+    "js": ["dist/content.js"],
+    "css": ["static/content.css"],
+    "run_at": "document_idle"
+  }],
+  "action": { "default_popup": "static/popup.html" }
+}

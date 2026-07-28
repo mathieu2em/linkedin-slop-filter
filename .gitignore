@@ -1,2 +1,29 @@
 node_modules/
 dist/
+
+# --- Secrets et donnees privees: ne JAMAIS committer ---------------------
+# Voir AGENTS.md section « Regles de confidentialite ».
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+*.ppk
+id_rsa
+id_ed25519
+secrets.*
+credentials.*
+cookies.txt
+cookies.json
+
+# Captures de navigateur: un .har contient les cookies de session LinkedIn
+# et le contenu complet du fil. Un screenshot du fil contient des noms reels.
+*.har
+*.crx
+*.pem.txt
+screenshots/
+captures/
+scratch/

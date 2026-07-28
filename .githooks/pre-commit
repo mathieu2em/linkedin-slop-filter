@@ -1,0 +1,89 @@
+#!/bin/sh
+# Refuse tout commit qui contient une clef, un secret, ou de la donnee privee.
+#
+# Activation, une fois par clone:
+#   git config core.hooksPath .githooks
+#
+# Contournement: git commit --no-verify. A justifier, jamais par habitude.
+# Ce hook ne se scanne pas lui-meme (il contient les motifs en clair).
+# ERE seulement: BSD grep (macOS) n'a pas -P.
+
+set -eu
+
+fail=0
+list=$(mktemp)
+trap 'rm -f "$list"' EXIT
+
+block() {
+  printf '\n[pre-commit] BLOQUE: %s\n             fichier: %s\n' "$1" "$2" >&2
+  fail=1
+}
+
+Q="\"'"
+
+# Clefs et tokens de fournisseurs connus.
+P_TOKEN='AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}'
+P_TOKEN="$P_TOKEN"'|sk-ant-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|AIza[0-9A-Za-z_-]{35}'
+P_TOKEN="$P_TOKEN"'|xox[abprs]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|SG\.[A-Za-z0-9_-]{16,}'
+P_TOKEN="$P_TOKEN"'|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}'
+
+# Secret ecrit en dur: cle = valeur quotee de 12 caracteres ou plus.
+P_ASSIGN="(api[_-]?key|apikey|client[_-]?secret|secret|password|passwd|token|bearer)[$Q]?[[:space:]]*[:=][[:space:]]*[$Q][^$Q[:space:]]{12,}[$Q]"
+
+# Cookies de session LinkedIn. Un seul li_at donne acces au compte complet.
+P_COOKIE='(li_at|li_rm|JSESSIONID|bcookie|bscookie|liap)[[:space:]]*[:=]'
+
+# Donnee privee de tiers. Le selecteur « urn:li:activity » du spec n'a pas de
+# chiffres, donc il passe; une URN reelle en a toujours.
+P_PRIVATE='urn:li:[a-zA-Z]+:[0-9]{6,}|linkedin\.com/in/[A-Za-z0-9%_-]{3,}'
+P_PRIVATE="$P_PRIVATE"'|linkedin\.com/posts/[A-Za-z0-9%_-]{5,}|data:image/[a-z]+;base64,'
+
+# Courriel. Les domaines de documentation et le noreply GitHub sont toleres.
+P_EMAIL='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+P_EMAIL_OK='@(example|test|invalid|localhost)\.|@users\.noreply\.github\.com'
+
+git diff --cached --name-only --diff-filter=ACM > "$list"
+
+# --- 1. Fichiers interdits, peu importe leur contenu ----------------------
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in
+    .env|.env.*|*.pem|*.key|*.p12|*.pfx|*.keystore|*.jks|*.ppk|*.har|*.crx|\
+    id_rsa|id_ed25519|*/id_rsa|*/id_ed25519|cookies.txt|cookies.json)
+      block "type de fichier interdit (secret, clef privee, ou capture reseau)" "$f"
+      ;;
+  esac
+done < "$list"
+
+# --- 2. Contenu ajoute par ce commit --------------------------------------
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in .githooks/*) continue ;; esac
+
+  added=$(git diff --cached -U0 -- "$f" | grep '^+' | grep -v '^+++' || true)
+  [ -n "$added" ] || continue
+
+  if printf '%s\n' "$added" | grep -Eq "$P_TOKEN"; then
+    block "ressemble a une clef API ou un token" "$f"
+  fi
+  if printf '%s\n' "$added" | grep -Eiq "$P_ASSIGN"; then
+    block "secret ecrit en dur dans le code" "$f"
+  fi
+  if printf '%s\n' "$added" | grep -Eiq "$P_COOKIE"; then
+    block "cookie de session LinkedIn" "$f"
+  fi
+  if printf '%s\n' "$added" | grep -Eq "$P_PRIVATE"; then
+    block "donnee privee de tiers (URN, profil, ou image encodee)" "$f"
+  fi
+  if printf '%s\n' "$added" | grep -Eio "$P_EMAIL" | grep -Eiv "$P_EMAIL_OK" | grep -q .; then
+    block "adresse courriel reelle" "$f"
+  fi
+done < "$list"
+
+if [ "$fail" -ne 0 ]; then
+  printf '\n[pre-commit] Commit refuse. Retire la donnee, puis recommence.\n' >&2
+  printf '             Faux positif: git commit --no-verify\n\n' >&2
+  exit 1
+fi
+
+exit 0
